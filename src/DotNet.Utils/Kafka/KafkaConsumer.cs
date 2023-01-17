@@ -72,7 +72,7 @@ namespace DotNet.Utils.Kafka
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, $"{nameof(IKafkaConsumerHandler<TKey, TValue>)} handle error: {_kafkaSettings.Topic}");
+                            _logger.LogError(ex, $"Kafka consumer handle error: {_kafkaSettings.Topic}");
                             await Task.Delay(1000);
                             goto retry;
                         }
@@ -90,14 +90,14 @@ namespace DotNet.Utils.Kafka
                             while (!await handler.Value.CommitAsync())
                             {
                                 await Task.Delay(10);
-                                _logger.LogWarning($"{nameof(IKafkaConsumerHandler<TKey, TValue>)} CommitAsync retry: {_kafkaSettings.Topic}");
+                                _logger.LogWarning($"Kafka consumer CommitAsync retry: {_kafkaSettings.Topic}");
                             }
                             _consumer.Commit(r.Last());
                             _metrics.CommitInc(r.Count);
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, $"{nameof(IKafkaConsumerHandler<TKey, TValue>)} commit error: {_kafkaSettings.Topic}");
+                            _logger.LogError(ex, $"Kafka consumer commit error: {_kafkaSettings.Topic}");
                             await Task.Delay(1000);
                             goto retry;
                         }
