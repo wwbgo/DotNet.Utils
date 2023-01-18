@@ -4,7 +4,24 @@
 		<TargetFrameworks>net6.0;net7.0</TargetFrameworks>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+
+		<Version>0.1.0</Version>
+		<Authors>wwb</Authors>
+		<Description>some useful utils and extensions classes for .net</Description>
+		<Copyright>wwb</Copyright>
+		<PackageProjectUrl>https://github.com/wwbgo/DotNet.Utils</PackageProjectUrl>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryUrl>https://github.com/wwbgo/DotNet.Utils</RepositoryUrl>
+		<PackageTags>dotnet;extensions</PackageTags>
+		<PackageId>One.$(AssemblyName)</PackageId>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\..\README.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Confluent.Kafka" Version="1.9.3" />

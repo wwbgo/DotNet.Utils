@@ -23,7 +23,7 @@ namespace DotNet.Utils.Kafka
         public static IServiceCollection AddKafka<TKey, TValue, TKafkaHandler>(this IServiceCollection services, string topic, Func<IDeserializer<TKey>> keyDeserializer = default, Func<IDeserializer<TValue?>> valueDeserializer = default) where TKafkaHandler : class, IKafkaConsumerHandler<TKey, TValue?>
         {
             services.AddTransient<IKafkaConsumerHandler<TKey, TValue?>, TKafkaHandler>();
-            services.AddSingleton<IKafkaConsumer, KafkaConsumer<TKey, TValue?, IKafkaConsumerHandler<TKey, TValue?>>>(_services =>
+            services.AddSingleton<IKafkaConsumer, KafkaConsumer<TKey, TValue?, TKafkaHandler>>(_services =>
             {
                 var appSettings = _services.GetRequiredService<IOptions<AppSettings>>().Value;
                 var kafkaSettings = _services.GetRequiredService<IOptions<AppSettings.KafkaSettings>>().Value;
@@ -36,8 +36,8 @@ namespace DotNet.Utils.Kafka
                     KeyDeserializer = keyDeserializer,
                     ValueDeserializer = valueDeserializer,
                 };
-                var logger = _services.GetService<ILogger<KafkaConsumer<TKey, TValue?, IKafkaConsumerHandler<TKey, TValue?>>>>();
-                return new KafkaConsumer<TKey, TValue?, IKafkaConsumerHandler<TKey, TValue?>>(config, _services, logger);
+                var logger = _services.GetService<ILogger<KafkaConsumer<TKey, TValue?, TKafkaHandler>>>();
+                return new KafkaConsumer<TKey, TValue?, TKafkaHandler>(config, _services, logger);
             });
             return services;
         }
