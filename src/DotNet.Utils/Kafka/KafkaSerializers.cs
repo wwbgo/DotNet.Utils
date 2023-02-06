@@ -1,6 +1,6 @@
 ﻿using Confluent.Kafka;
 
-namespace CacheManager.Kafka
+namespace DotNet.Utils.Kafka
 {
     public class KafkaSerializers
     {
