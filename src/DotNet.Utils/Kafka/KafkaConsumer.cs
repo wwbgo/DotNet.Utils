@@ -59,7 +59,7 @@ namespace DotNet.Utils.Kafka
                 var subject = _partitionQueues[i] = new Lazy<ISubject<ConsumeResult<TKey, TValue>>>(() =>
                 {
                     var _subject = new Subject<ConsumeResult<TKey, TValue>>();
-                    _subject.Limit(async r =>
+                    _subject.Do(async r =>
                     {
                     retry:
                         try
@@ -76,7 +76,8 @@ namespace DotNet.Utils.Kafka
                             await Task.Delay(1000);
                             goto retry;
                         }
-                    }, _kafkaSettings.MaxBufferCount, _cancelToken.Token)
+                    })
+                    .Limit(_kafkaSettings.MaxBufferCount, _cancelToken.Token)
                     .Batch(TimeSpan.FromSeconds(5), _kafkaSettings.MaxBufferCount)
                     .DoAsync(async r =>
                     {

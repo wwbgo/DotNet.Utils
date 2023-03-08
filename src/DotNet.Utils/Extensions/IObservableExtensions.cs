@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Reactive.Linq;
+﻿using System.Reactive.Linq;
 
 namespace DotNet.Utils
 {
@@ -28,37 +27,7 @@ namespace DotNet.Utils
 
         public static IObservable<T> Limit<T>(this IObservable<T> source, int maxCount = 10000, CancellationToken cancellationToken = default)
         {
-            return Limit<T>(source, null, maxCount, cancellationToken);
-        }
-        public static IObservable<T> Limit<T>(this IObservable<T> source, Func<T, Task> onNext, int maxCount = 10000, CancellationToken cancellationToken = default)
-        {
-            return Observable.Using(() => new BlockingCollection<T>(maxCount), queue =>
-            {
-                if (cancellationToken == default)
-                {
-                    cancellationToken = CancellationToken.None;
-                }
-                source.Do(r => queue.Add(r, cancellationToken)).Subscribe(cancellationToken);
-                return Observable.Create<T>(subscribe =>
-                {
-                    Task.Run(async () =>
-                    {
-                        while (!cancellationToken.IsCancellationRequested)
-                        {
-                            var data = queue.Take(cancellationToken);
-                            if (onNext != null)
-                            {
-                                await onNext(data);
-                            }
-                            subscribe.OnNext(data);
-                        }
-                    }).ConfigureAwait(false);
-                    return () =>
-                    {
-                        subscribe.OnCompleted();
-                    };
-                });
-            });
+            return source.ObserveOn(new BufferSynchronizationContext(maxCount, cancellationToken));
         }
         public static IObservable<IList<T>> Batch<T>(this IObservable<T> source, TimeSpan timeSpan, int count)
         {
