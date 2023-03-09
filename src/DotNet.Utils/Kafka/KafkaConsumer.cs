@@ -15,6 +15,7 @@ namespace DotNet.Utils.Kafka
         private readonly ConsumerConfig _config;
         private Lazy<ISubject<ConsumeResult<TKey, TValue>>>[] _partitionQueues;
         private Lazy<IKafkaConsumerHandler<TKey, TValue>>[] _handlers;
+        private Offset[] _offsets;
         private readonly CancellationTokenSource _cancelToken;
         private IConsumer<TKey, TValue> _consumer;
         private IKafkaMetrics _metrics;
@@ -47,6 +48,7 @@ namespace DotNet.Utils.Kafka
             var partitionCount = GetPartitionCount();
             _partitionQueues = new Lazy<ISubject<ConsumeResult<TKey, TValue>>>[partitionCount];
             _handlers = new Lazy<IKafkaConsumerHandler<TKey, TValue>>[partitionCount];
+            _offsets = new Offset[partitionCount];
             _consumer = ConsumerBuild();
             _ = Run();
             _logger.LogInformation($"Kafka consumer is running: {_kafkaSettings.Topic}");
@@ -85,7 +87,11 @@ namespace DotNet.Utils.Kafka
                         {
                             return;
                         }
-                    retry:
+                        var last = r.Last();
+                        if (_offsets[last.Partition.Value] >= last.Offset)
+                        {
+                            return;
+                        }
                         try
                         {
                             while (!handler.Value.CommitAsync().GetAwaiter().GetResult())
@@ -94,14 +100,13 @@ namespace DotNet.Utils.Kafka
                                 _logger.LogWarning($"Kafka consumer CommitAsync retry: {_kafkaSettings.Topic}");
                             }
                             _consumer.Commit(r.Last());
-                            _metrics.CommitInc(r.Count);
                         }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, $"Kafka consumer commit error: {_kafkaSettings.Topic}");
-                            Task.Delay(1000).GetAwaiter().GetResult();
-                            goto retry;
                         }
+                        _offsets[last.Partition.Value] = last.Offset;
+                        _metrics.CommitInc(r.Count);
                     }, _cancelToken.Token);
                     return _subject;
                 });
@@ -135,6 +140,37 @@ namespace DotNet.Utils.Kafka
                                 {
                                     _logger.LogWarning($"{_kafkaSettings.Topic} {err.Code} {err.Reason}");
                                 }
+                            })
+                            .SetPartitionsAssignedHandler((_consumer, _partitions) =>
+                            {
+                                var committedOffsets = _consumer.Committed(_partitions, TimeSpan.FromSeconds(60));
+                                var offsets = new List<TopicPartitionOffset>();
+                                foreach (var partition in _partitions)
+                                {
+                                    var committedOffset = committedOffsets.FirstOrDefault(r => r.TopicPartition == partition);
+                                    if (committedOffset != null && !committedOffset.Offset.IsSpecial)
+                                    {
+                                        var woffset = _consumer.QueryWatermarkOffsets(partition, TimeSpan.FromSeconds(60));
+                                        if (woffset.High <= committedOffset.Offset)
+                                        {
+                                            _offsets[partition.Partition.Value] = woffset.High;
+                                        }
+                                        else if (woffset.Low >= committedOffset.Offset)
+                                        {
+                                            _offsets[partition.Partition.Value] = woffset.Low;
+                                        }
+                                        else
+                                        {
+                                            _offsets[partition.Partition.Value] = committedOffset.Offset;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        _offsets[partition.Partition.Value] = Offset.Unset;
+                                    }
+                                    offsets.Add(new TopicPartitionOffset(partition, _offsets[partition.Partition.Value]));
+                                }
+                                return offsets;
                             })
                             .SetKeyDeserializerOrDefault(_kafkaSettings.KeyDeserializer)
                             .SetValueDeserializerOrDefault(_kafkaSettings.ValueDeserializer)
