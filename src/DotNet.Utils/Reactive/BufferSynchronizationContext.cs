@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace DotNet.Utils
+namespace DotNet.Utils.Reactive
 {
     public class BufferSynchronizationContext : SynchronizationContext
     {

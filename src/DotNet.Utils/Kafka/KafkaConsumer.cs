@@ -1,4 +1,5 @@
 ﻿using Confluent.Kafka;
+using DotNet.Utils.Reactive;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Reactive.Linq;
@@ -58,28 +59,27 @@ namespace DotNet.Utils.Kafka
                 var handler = _handlers[i] = new Lazy<IKafkaConsumerHandler<TKey, TValue>>(_serviceProvider.GetRequiredService<IKafkaConsumerHandler<TKey, TValue>>);
                 var subject = _partitionQueues[i] = new Lazy<ISubject<ConsumeResult<TKey, TValue>>>(() =>
                 {
-                    var _subject = new Subject<ConsumeResult<TKey, TValue>>();
-                    _subject.Do(async r =>
+                    var _subject = new AsyncBufferSubject<ConsumeResult<TKey, TValue>>(_kafkaSettings.MaxBufferCount);
+                    _subject.Do(r =>
                     {
                     retry:
                         try
                         {
-                            while (!await handler.Value.HandlerAsync(r))
+                            while (!handler.Value.HandlerAsync(r).GetAwaiter().GetResult())
                             {
-                                await Task.Delay(10);
+                                Task.Delay(10).GetAwaiter().GetResult();
                             }
                             _metrics.HandlerInc();
                         }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, $"Kafka consumer handle error: {_kafkaSettings.Topic}");
-                            await Task.Delay(1000);
+                            Task.Delay(1000).GetAwaiter().GetResult();
                             goto retry;
                         }
                     })
-                    .Limit(_kafkaSettings.MaxBufferCount, _cancelToken.Token)
                     .Batch(TimeSpan.FromSeconds(5), _kafkaSettings.MaxBufferCount)
-                    .DoAsync(async r =>
+                    .Subscribe(r =>
                     {
                         if (!r.Any())
                         {
@@ -88,9 +88,9 @@ namespace DotNet.Utils.Kafka
                     retry:
                         try
                         {
-                            while (!await handler.Value.CommitAsync())
+                            while (!handler.Value.CommitAsync().GetAwaiter().GetResult())
                             {
-                                await Task.Delay(10);
+                                Task.Delay(10).GetAwaiter().GetResult();
                                 _logger.LogWarning($"Kafka consumer CommitAsync retry: {_kafkaSettings.Topic}");
                             }
                             _consumer.Commit(r.Last());
@@ -99,10 +99,10 @@ namespace DotNet.Utils.Kafka
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, $"Kafka consumer commit error: {_kafkaSettings.Topic}");
-                            await Task.Delay(1000);
+                            Task.Delay(1000).GetAwaiter().GetResult();
                             goto retry;
                         }
-                    }).Subscribe(_cancelToken.Token);
+                    }, _cancelToken.Token);
                     return _subject;
                 });
             }
@@ -153,7 +153,7 @@ namespace DotNet.Utils.Kafka
             using var admin = new AdminClientBuilder(config).Build();
             var meta = admin.GetMetadata(_kafkaSettings.Topic, TimeSpan.FromSeconds(30));
             var topicMeta = meta.Topics.FirstOrDefault(r => r.Topic == _kafkaSettings.Topic);
-            if (topicMeta != null && topicMeta.Error.Code == Confluent.Kafka.ErrorCode.NoError)
+            if (topicMeta != null && topicMeta.Error.Code == ErrorCode.NoError)
             {
                 partitionCount = topicMeta.Partitions.Count;
             }
